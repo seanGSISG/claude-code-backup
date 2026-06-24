@@ -12,6 +12,18 @@ identity collisions, rebase corruption, silent Windows restore failures, and
 concurrent-run races — and stops restore from silently clobbering local config.
 
 ### Added
+- **Multi-machine model (M1–M4).** Machines now carry a human **label** and
+  **role** (work/home/shared), prompted at `init` and shown wherever machines are
+  listed. **Selective restore** filters: `--only-categories` /
+  `--exclude-categories` / `--include-labels` / `--exclude-labels` (items are
+  auto-labeled — MCP, sessions, and `settings.local.json` get `sensitive`, so
+  `--exclude-labels sensitive` is a real privacy switch). **Opt-in sync groups**
+  (`sync-config.json`): once you declare groups, restore refuses to move config
+  between machines that don't share one (the work→home leak guard); with no
+  groups configured it behaves exactly as before. **Per-machine exclude**
+  (`exclude.json`): keep chosen scopes/categories/paths/projects out of this
+  machine's backup entirely. The three config files are local, per-machine, and
+  never committed.
 - **Restore conflict preview (M5).** Every backed-up item is stamped with an
   `exportedAt` time. Before restoring, `restore` checks whether the destination
   (or any file inside a backed-up folder) changed *after* the backup was taken;

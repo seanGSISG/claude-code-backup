@@ -76,6 +76,25 @@ and session transcripts. Nothing is silently dropped. Therefore:
   the affected credentials: regenerate MCP server API keys/tokens, and rotate any
   tokens stored in `settings.local.json` / `.claude.json`.
 
+### Keeping machines separate (optional, local config)
+
+Three optional files in `~/.claude-backups/` are **local to each machine** and
+never committed:
+
+- **`exclude.json`** — keep things out of *this* machine's backup entirely
+  (e.g. personal projects off a work machine, or drop sessions/`settings.local.json`):
+  `{ "excludeCategories": ["session"], "projectFilter": { "mode": "exclude", "patterns": ["*personal*"] } }`.
+- **`sync-config.json`** — declare **sync groups** of machines that may share
+  config. Once any group exists, `restore` refuses to copy one machine's config
+  onto another unless they share a group (prevents leaking work config to home).
+  With no file present, cross-machine restore works as usual.
+- **`machine-id.json`** — this machine's stable identity (UUID, label, role);
+  created automatically. Never share or copy it between machines.
+
+When restoring, you can also filter per run: `--exclude-labels sensitive`
+(drops MCP/sessions/`settings.local.json`), `--only-categories skill,agent`,
+`--exclude-categories session`, etc.
+
 ## Quick start
 
 ```bash
