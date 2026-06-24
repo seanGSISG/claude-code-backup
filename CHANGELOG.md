@@ -7,9 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - Unreleased
 
-Foundation + P0 hardening: makes the shared multi-machine repo safe against
+P0 hardening + P1 safety: makes the shared multi-machine repo safe against
 identity collisions, rebase corruption, silent Windows restore failures, and
-concurrent-run races.
+concurrent-run races — and stops restore from silently clobbering local config.
+
+### Added
+- **Restore conflict preview (M5).** Every backed-up item is stamped with an
+  `exportedAt` time. Before restoring, `restore` checks whether the destination
+  (or any file inside a backed-up folder) changed *after* the backup was taken;
+  such items are flagged as conflicts. Dry-run lists them and `--apply` aborts
+  (all-or-nothing) rather than overwrite newer local edits — pass `--force` to
+  override. Detection is mtime-based (documented clock-skew caveat).
+- **Per-run secret reminder + visibility surfacing (C5).** Each `run` does a
+  quick heuristic scan of the config it just backed up and prints a one-line,
+  non-blocking "keep the repo private / rotate exposed keys" reminder (session
+  transcripts excluded to avoid noise; secret values are never logged). `status`
+  now re-verifies and reports the remote's visibility (private / PUBLIC /
+  unknown) every time. New README "Security & secrets" section.
+
+### Changed
+- **MCP restore no longer clobbers a customized server (C7).** When a server of
+  the same name already exists in the destination and *differs* from the backup,
+  `restore` now skips it (logged, counted, "use `--force` to overwrite"); an
+  identical config is a no-op, and an absent server is added as before.
 
 ### Fixed
 - **Stable per-machine identity — no more silent clobber (C1).** Machine identity
