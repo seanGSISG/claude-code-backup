@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { mkdir, readFile, writeFile, access } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { acquireLock, releaseLock, ensureLocalIgnores, LOCAL_IGNORES } from "../src/runlock.mjs";
+import { renderMachineLines } from "../src/cli-ui.mjs";
 
 const HOME = homedir();
 const BACKUP_DIR = join(HOME, ".claude-backups");
@@ -322,6 +323,34 @@ async function cmdRunLocked() {
   });
 }
 
+async function cmdList() {
+  const { readBackupIndex } = await import("../src/exporter.mjs");
+  const { localMachineUuid } = await import("../src/sync-config.mjs");
+
+  let environments = [];
+  try {
+    ({ environments } = await readBackupIndex(join(BACKUP_DIR, "latest")));
+  } catch (err) {
+    // readBackupIndex tolerates a missing dir (returns []); a throw here is a
+    // genuine fault (corrupt JSON, unreadable repo) — surface it, don't mask it.
+    log(`Could not read backup index: ${err.message}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!environments.length) {
+    log("No backups found in ~/.claude-backups/latest/.");
+    log("Run 'claude-code-backup init' (first time) or 'claude-code-backup run' to create one.");
+    return;
+  }
+
+  const thisUuid = await localMachineUuid(BACKUP_DIR);
+  log("Machines in backup:");
+  for (const line of renderMachineLines(environments, { thisUuid, nowMs: Date.now() })) {
+    log(line);
+  }
+}
+
 async function cmdStatus() {
   const { status } = await import("../src/scheduler.mjs");
   const config = await loadConfig();
@@ -471,6 +500,9 @@ switch (command) {
   case "status":
     await cmdStatus();
     break;
+  case "list":
+    await cmdList();
+    break;
   case "restore":
     await cmdRestore();
     break;
@@ -483,6 +515,7 @@ switch (command) {
     log("  claude-code-backup init        Set up backup repo + schedule");
     log("  claude-code-backup run         Run backup now");
     log("  claude-code-backup status      Show backup status");
+    log("  claude-code-backup list        List machines/envs in the backup");
     log("  claude-code-backup restore     Restore from backup (dry-run; add --apply)");
     log("  claude-code-backup uninstall   Remove scheduled backup\n");
     log("  run flags:     --quiet  --allow-public  --confirm-collision");

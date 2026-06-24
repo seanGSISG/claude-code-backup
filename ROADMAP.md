@@ -263,7 +263,7 @@ This machine:
 - [x] **M4** per-machine exclude.json at export
 - [ ] **UX** new init question script
 - [ ] **UX** status rewrite (scan env dirs, group by label, staleness/unpushed/warnings)
-- [ ] **UX** `list` command
+- [x] **UX** `list` command
 - [ ] **UX** `doctor` command
 - [ ] **UX** `restore --interactive`
 - [ ] **C9** `prune` + skip unreachable sources in restore
