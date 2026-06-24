@@ -11,7 +11,7 @@
  */
 
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import { fileURLToPath } from "node:url";
 import { mkdir, readFile, writeFile, access } from "node:fs/promises";
 import { createInterface } from "node:readline";
@@ -41,6 +41,24 @@ function ask(question) {
 
 async function exists(p) {
   try { await access(p); return true; } catch { return false; }
+}
+
+/** Prompt once for this machine's label + role; persist them in machine-id.json. */
+async function ensureMachineIdentity() {
+  const { persistedMachineIdentity } = await import("../src/environments.mjs");
+  let existing;
+  try { existing = JSON.parse(await readFile(join(BACKUP_DIR, "machine-id.json"), "utf-8")); } catch {}
+  if (existing?.uuid) {
+    log(`This machine: ${existing.label} (role: ${existing.role})`);
+    return existing;
+  }
+  const host = hostname() || "machine";
+  const label = (await ask(`Label for this machine [${host}]: `)).trim() || host;
+  const roleAns = (await ask("Role: [1] work  [2] home  [3] shared (3): ")).trim();
+  const role = roleAns === "1" ? "work" : roleAns === "2" ? "home" : "shared";
+  const identity = await persistedMachineIdentity(BACKUP_DIR, { label, role });
+  log(`This machine: ${identity.label} (role: ${identity.role})`);
+  return identity;
 }
 
 async function loadConfig() {
@@ -212,6 +230,11 @@ async function cmdInit() {
 
   // Save config
   await saveConfig({ interval, installedAt: new Date().toISOString() });
+
+  // Machine identity (label + role) — stamped into env.json and shown wherever
+  // machines are listed (status/list). Prompted once; persisted locally.
+  log("");
+  await ensureMachineIdentity();
 
   // Run first backup
   log("\nRunning first backup...\n");

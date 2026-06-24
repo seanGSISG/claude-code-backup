@@ -257,7 +257,7 @@ This machine:
 - [x] **C7** MCP merge skip-unless-force (+ count skips)
 - [x] **C5** secret-scan warning + per-run visibility re-check + README rotate note (exclude hook deferred to M4)
 - [x] **M5** conflict preview via manifest `exportedAt` (abort apply unless --force)
-- [ ] **M1** labels/role in machine-id.json + stamp env.json; show labels everywhere
+- [x] **M1** labels/role in machine-id.json + stamp env.json; show labels everywhere
 - [ ] **M3** per-item labels + selective restore filters (only/exclude categories/labels)
 - [ ] **M2** sync groups + cross-group leak guard
 - [ ] **M4** per-machine exclude.json at export
