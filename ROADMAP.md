@@ -256,7 +256,7 @@ This machine:
 - [x] **C6** compute summary on read + per-run lockfile
 - [x] **C7** MCP merge skip-unless-force (+ count skips)
 - [x] **C5** secret-scan warning + per-run visibility re-check + README rotate note (exclude hook deferred to M4)
-- [ ] **M5** conflict preview via manifest `exportedAt` (abort apply unless --force)
+- [x] **M5** conflict preview via manifest `exportedAt` (abort apply unless --force)
 - [ ] **M1** labels/role in machine-id.json + stamp env.json; show labels everywhere
 - [ ] **M3** per-item labels + selective restore filters (only/exclude categories/labels)
 - [ ] **M2** sync groups + cross-group leak guard

@@ -401,8 +401,18 @@ async function cmdRestore() {
     return;
   }
 
+  // M5: apply aborted because dest files changed locally since the backup.
+  if (result.aborted) {
+    log(`\nNothing was restored. ${result.conflicts.length} local file(s) are newer than the backup.`);
+    process.exitCode = 1;
+    return;
+  }
+
   log("");
   log(`${apply ? "Restored" : "Would restore"}: ${result.restored} files/dirs, ${result.merged} MCP merges, ${result.skipped} skipped`);
+  if (result.conflicts?.length) {
+    log(`${apply ? "Overwrote" : "Conflicts"}: ${result.conflicts.length} item(s) newer locally than the backup${apply ? " (--force)" : " (use --force to overwrite)"}`);
+  }
   for (const p of result.pairs) {
     log(`  ${p.from} → ${p.to}${p.cross ? " (cross-OS)" : ""}`);
   }

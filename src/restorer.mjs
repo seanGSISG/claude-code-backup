@@ -10,7 +10,7 @@
  * Dry-run by default: nothing is written unless { apply: true }.
  */
 
-import { readFile, writeFile, mkdir, copyFile, cp, access, rename } from "node:fs/promises";
+import { readFile, writeFile, mkdir, copyFile, cp, access, rename, stat, readdir } from "node:fs/promises";
 import { join, dirname, basename } from "node:path";
 import { homedir } from "node:os";
 import { discoverEnvironments } from "./environments.mjs";
@@ -120,6 +120,41 @@ export function insideHome(destNative, destEnv) {
   const home = fold(destEnv.home);
   const dest = fold(destNative);
   return dest.startsWith(home + sepOf(destStyle)) || dest === home;
+}
+
+/**
+ * Newest mtime at/under a path. For a directory this recurses (a dir's own
+ * mtime does NOT change when a nested file is edited — e.g. a skill folder's
+ * source), so directory conflicts aren't missed. Returns null if path is missing.
+ */
+async function newestMtimeMs(p) {
+  let st;
+  try { st = await stat(p); } catch { return null; }
+  if (!st.isDirectory()) return st.mtimeMs;
+  let newest = st.mtimeMs;
+  let entries;
+  try { entries = await readdir(p, { withFileTypes: true }); } catch { return newest; }
+  for (const e of entries) {
+    if (e.isSymbolicLink()) continue;                 // don't follow symlinks
+    const m = await newestMtimeMs(join(p, e.name));
+    if (m !== null && m > newest) newest = m;
+  }
+  return newest;
+}
+
+/**
+ * M5: a destination "conflicts" if it exists and was modified AFTER this item
+ * was backed up — restoring would clobber newer local edits. For directories,
+ * any newer file *inside* it counts. Missing dest or unparseable timestamp → no
+ * conflict. NOTE: mtime-based, so it can't see across a clock-skewed pair of
+ * machines; the dry-run default + --force keep the user in control.
+ */
+export async function isConflict(writePath, exportedAtIso) {
+  const exportedMs = new Date(exportedAtIso).getTime();
+  if (!Number.isFinite(exportedMs)) return false;
+  const m = await newestMtimeMs(writePath);
+  if (m === null) return false;            // dest doesn't exist → nothing to overwrite
+  return m > exportedMs;
 }
 
 // ── MCP merge (read-modify-write the host JSON, never clobber) ───────────
@@ -241,7 +276,39 @@ export async function restore(backupDir = BACKUP_DIR, opts = {}) {
     log(`Backup contains ${sources.length} environments: ${sources.map((s) => s.env.id).join(", ")}`);
   }
 
-  const result = { applied: !!opts.apply, restored: 0, merged: 0, skipped: 0, errors: [], pairs: [] };
+  const result = { applied: !!opts.apply, restored: 0, merged: 0, skipped: 0, errors: [], pairs: [], conflicts: [] };
+
+  // M5: scan for destinations that changed locally SINCE this backup (dest mtime
+  // newer than the item's exportedAt) — restoring would overwrite newer edits.
+  // Collect them all first; in apply mode, abort unless --force so nothing is
+  // clobbered silently. Dry-run just lists them in the preview. MCP items are
+  // excluded (they go through the C7 merge/skip path, not a blind overwrite).
+  for (const src of chosen) {
+    const dest = pickDest(src.env, destEnvs, opts);
+    let items = src.manifest.items;
+    if (opts.scope) items = items.filter((i) => i.scopeId === opts.scope);
+    for (const item of items) {
+      if (item.category === "mcp" || !item.exportedAt) continue;
+      const m = mapItem(item, src.env, dest);
+      if (m.skip || !insideHome(m.destNative, dest)) continue;
+      if (await isConflict(toWritePath(m.destNative, dest), item.exportedAt)) {
+        result.conflicts.push({ from: src.env.id, backupPath: item.backupPath, dest: m.destNative });
+      }
+    }
+  }
+
+  if (result.conflicts.length) {
+    log(`\n⚠ ${result.conflicts.length} item(s) changed locally since this backup:`);
+    for (const c of result.conflicts.slice(0, 20)) log(`  conflict  ${c.backupPath}  → ${c.dest}`);
+    if (result.conflicts.length > 20) log(`  … +${result.conflicts.length - 20} more`);
+    if (opts.apply && !opts.force) {
+      log(`\n✗ Apply aborted to avoid overwriting newer local changes.`);
+      log(`  Re-run with --force to overwrite, or narrow with --scope/--from.`);
+      result.aborted = true;
+      return result;
+    }
+    log(opts.apply ? `  (--force given — these will be overwritten)` : `  (these would be overwritten by --apply)`);
+  }
 
   for (const src of chosen) {
     const dest = pickDest(src.env, destEnvs, opts);

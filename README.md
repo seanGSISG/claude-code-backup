@@ -158,13 +158,20 @@ real location on the current machine. It handles:
 - **Cross-OS** — translates path separators and **re-encodes** project-dir names
   (e.g. a Linux backup's `-home-you-app` becomes `C--Users-you-app` on Windows).
 - **Restoring into WSL from Windows** — writes through the `\\wsl.localhost\…` share.
-- **MCP configs** — merged into the destination's host JSON (never clobbered).
+- **MCP configs** — merged into the destination's host JSON; an existing,
+  differing server is **skipped** unless you pass `--force`.
+- **Conflict preview** — if a destination file (or anything inside a backed-up
+  folder) was modified *after* the backup was taken, restore flags it as a
+  conflict. In dry-run it's listed; `--apply` **aborts** rather than overwrite
+  newer local edits unless you pass `--force`. (Detection is mtime-based, so it
+  can't compare across machines whose clocks differ — the dry-run default and
+  `--force` keep you in control.)
 
 Flags: `--from <envId>` / `--to <envId>` choose source/destination environments
-(defaults match by OS kind); `--scope <id>` restores a single scope; `--verbose`
-lists skipped items. Restore is **dry-run by default**, refuses to write outside
-the destination home, never touches enterprise-managed dirs, and renames any
-overwritten file to `*.bak` first.
+(defaults match by OS kind); `--scope <id>` restores a single scope; `--force`
+overwrites conflicts/MCP servers; `--verbose` lists skipped items. Restore is
+**dry-run by default**, refuses to write outside the destination home, never
+touches enterprise-managed dirs, and renames any overwritten file to `*.bak` first.
 
 ## Scheduler details
 

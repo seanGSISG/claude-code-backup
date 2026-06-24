@@ -73,6 +73,7 @@ async function exportEnvItems(data, env, envBase) {
   let copied = 0;
   const errors = [];
   const manifestItems = [];
+  const exportedAt = new Date().toISOString();   // M5: stamp items for conflict detection
 
   // scopeId → native repoRoot (for project-scope restore re-rooting)
   const repoRootByScope = new Map();
@@ -114,6 +115,7 @@ async function exportEnvItems(data, env, envBase) {
         category: item.category,
         scopeId: item.scopeId,
         isDir,
+        exportedAt,
       };
       if (repoRootByScope.has(item.scopeId)) entry.repoRoot = repoRootByScope.get(item.scopeId);
       if (item.category === "mcp") {
