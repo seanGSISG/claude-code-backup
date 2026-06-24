@@ -254,7 +254,7 @@ This machine:
 - [x] **C2** rebase-conflict detection/abort in commitAndPush
 - [x] **C3** case-insensitive insideHome on Windows
 - [x] **C6** compute summary on read + per-run lockfile
-- [ ] **C7** MCP merge skip-unless-force (+ count skips)
+- [x] **C7** MCP merge skip-unless-force (+ count skips)
 - [ ] **C5** secret-scan warning + per-run visibility re-check + exclude hook + README rotate note
 - [ ] **M5** conflict preview via manifest `exportedAt` (abort apply unless --force)
 - [ ] **M1** labels/role in machine-id.json + stamp env.json; show labels everywhere

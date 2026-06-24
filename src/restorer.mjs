@@ -124,39 +124,54 @@ export function insideHome(destNative, destEnv) {
 
 // ── MCP merge (read-modify-write the host JSON, never clobber) ───────────
 
-async function mergeMcp(item, backupFile, writePath, destEnv, srcEnv, apply) {
+/** Order-insensitive deep stringify, so key-order differences aren't "changes". */
+function stableStringify(v) {
+  if (v === undefined) return "undefined";          // keep undefined distinguishable
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return "[" + v.map(stableStringify).join(",") + "]";
+  return "{" + Object.keys(v).sort().map((k) => JSON.stringify(k) + ":" + stableStringify(v[k])).join(",") + "}";
+}
+export const sameConfig = (a, b) => stableStringify(a) === stableStringify(b);
+
+export async function mergeMcp(item, backupFile, writePath, destEnv, srcEnv, apply, opts = {}) {
   const fragment = await readJson(backupFile);          // { "<name>": {config} }
   if (!fragment) return { ok: false, reason: "unreadable fragment" };
   const name = item.mcpServerName || Object.keys(fragment)[0];
   const config = fragment[name];
+  if (config === undefined) return { ok: false, reason: `no config for '${name}' in fragment` };
   const host = (await readJson(writePath)) || {};
 
-  if ((item.hostFile || "").toLowerCase() === ".claude.json") {
-    if (item.claudeJsonProjectKey) {
-      // Project-scoped server: projects[<destRepoKey>].mcpServers[name]
-      const srcStyle = styleOf(srcEnv.osPlatform), destStyle = styleOf(destEnv.osPlatform);
-      const key = item.claudeJsonProjectKey.startsWith(srcEnv.home)
-        ? reRoot(item.claudeJsonProjectKey, srcEnv.home, srcStyle, destEnv.home, destStyle)
-        : item.claudeJsonProjectKey;
-      host.projects = host.projects || {};
-      host.projects[key] = host.projects[key] || {};
-      host.projects[key].mcpServers = host.projects[key].mcpServers || {};
-      host.projects[key].mcpServers[name] = config;
-    } else {
-      host.mcpServers = host.mcpServers || {};
-      host.mcpServers[name] = config;
-    }
+  // Resolve the object that holds this server's config (project-scoped vs global).
+  let container;
+  if ((item.hostFile || "").toLowerCase() === ".claude.json" && item.claudeJsonProjectKey) {
+    const srcStyle = styleOf(srcEnv.osPlatform), destStyle = styleOf(destEnv.osPlatform);
+    const key = item.claudeJsonProjectKey.startsWith(srcEnv.home)
+      ? reRoot(item.claudeJsonProjectKey, srcEnv.home, srcStyle, destEnv.home, destStyle)
+      : item.claudeJsonProjectKey;
+    host.projects = host.projects || {};
+    host.projects[key] = host.projects[key] || {};
+    host.projects[key].mcpServers = host.projects[key].mcpServers || {};
+    container = host.projects[key].mcpServers;
   } else {
     host.mcpServers = host.mcpServers || {};
-    host.mcpServers[name] = config;
+    container = host.mcpServers;
   }
+
+  // C7: never silently clobber a locally-customized server. If one already
+  // exists and differs, skip unless --force; if it's identical, it's a no-op.
+  const existing = container[name];
+  if (existing !== undefined) {
+    if (sameConfig(existing, config)) return { ok: true, server: name, unchanged: true };
+    if (!opts.force) return { ok: false, skipped: true, server: name, reason: "exists-differs" };
+  }
+  container[name] = config;
 
   if (apply) {
     await mkdir(dirname(writePath), { recursive: true });
     if (await exists(writePath)) await backup(writePath);
     await writeFile(writePath, JSON.stringify(host, null, 2) + "\n");
   }
-  return { ok: true, server: name };
+  return { ok: true, server: name, overwritten: existing !== undefined };
 }
 
 async function backup(p) {
@@ -255,9 +270,18 @@ export async function restore(backupDir = BACKUP_DIR, opts = {}) {
 
       try {
         if (item.category === "mcp") {
-          const r = await mergeMcp(item, backupFile, writePath, dest, src.env, opts.apply);
-          if (r.ok) { result.merged++; log(`  merge mcp  ${r.server}  → ${m.destNative}`); }
-          else { result.skipped++; }
+          const r = await mergeMcp(item, backupFile, writePath, dest, src.env, opts.apply, { force: opts.force });
+          if (r.ok) {
+            if (!r.unchanged) result.merged++;   // a no-op isn't a merge
+            const note = r.unchanged ? " (already current)" : r.overwritten ? " (overwritten)" : "";
+            log(`  merge mcp  ${r.server}${note}  → ${m.destNative}`);
+          } else if (r.skipped) {
+            result.skipped++;
+            result.errors.push(`mcp '${r.server}' already exists and differs — skipped (use --force to overwrite)`);
+            log(`  skip  mcp ${r.server}  (exists & differs; --force to overwrite)`);
+          } else {
+            result.skipped++;
+          }
           continue;
         }
 
